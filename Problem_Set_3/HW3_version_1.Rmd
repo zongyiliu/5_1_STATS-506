@@ -1,0 +1,350 @@
+
+---
+title: "Homework_3"
+author: "Zongyi Liu"
+date: "2023-10-09"
+output: html_document
+---
+
+{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+Problem 1 Vision
+
+a
+
+Download the file VIX_D from this location, and determine how to read it into Stata. Then download the file DEMO_D from this location. Note that each page contains a link to a documentation file for that data set. Merge the two files to create a single Stata dataset, using the SEQN variable for merging. Keep only records which matched. Print our your total sample size, showing that it is now 6,980.
+
+We can use the following codes to import and merge the datasets
+
+. import sasxport5 VIX_D
+
+. save "/Applications/Stata/VIX_D.dta"
+file /Applications/Stata/VIX_D.dta saved
+
+. import sasxport5 DEMO_D
+
+. save "/Applications/Stata/DEMO_D.dta"
+file /Applications/Stata/DEMO_D.dta saved
+
+Result                      Number of obs
+    -----------------------------------------
+    Not matched                         3,368
+        from master                     3,368  (_merge==1)
+        from using                          0  (_merge==2)
+
+    Matched                             6,980  (_merge==3)
+    -----------------------------------------
+
+. merge 1:1 seqn using "/Applications/Stata/DEMO_D.dta"
+
+Result                      Number of obs
+    -----------------------------------------
+    Not matched                         3,368
+        from master                     3,368  (_merge==1)
+        from using                          0  (_merge==2)
+
+    Matched                             6,980  (_merge==3)
+    -----------------------------------------
+
+. merge 1:1 seqn using "/Applications/Stata/DEMO_D.dta"
+
+The results are as above, and we can see that the number of entries are 6980.
+
+b
+
+Without fitting any models, estimate the proportion of respondents within each 10-year age bracket (e.g. 0-9, 10-19, 20-29, etc) who wear glasses/contact lenses for distance vision. Produce a nice table with the results.
+
+First to recode the age into separate groups
+
+gen age = .
+
+replace age = 1 if ridageyr\>=0&ridageyr\<=9
+
+replace age = 2 if ridageyr\>=10&ridageyr\<=19
+
+replace age = 3 if ridageyr\>=20&ridageyr\<=29
+
+replace age = 4 if ridageyr\>=30&ridageyr\<=39
+
+replace age = 5 if ridageyr\>=40&ridageyr\<=49
+
+replace age = 6 if ridageyr\>=50&ridageyr\<=59
+
+replace age = 7 if ridageyr\>=60&ridageyr\<=69
+
+replace age = 8 if ridageyr\>=70&ridageyr\<=79
+
+replace age = 9 if ridageyr\>=80&ridageyr\<=89
+
+table (age)(viq220), statistic(percent)
+
+The resultant table is generated as follows
+
+---------------------------------------------------------
+        |     Glasses/contact lenses worn for distance   
+        |           1           2          9        Total
+--------+------------------------------------------------
+age     |                                                
+  2     |       10.23       21.66                   31.89
+  3     |        4.67        9.64       0.03        14.34
+  4     |        4.11        7.35                   11.46
+  5     |        4.37        7.44                   11.81
+  6     |        5.12        4.19                    9.30
+  7     |        5.99        3.64                    9.62
+  8     |        4.57        2.26                    6.83
+  9     |        3.18        1.57                    4.75
+  Total |       42.23       57.74       0.03       100.00
+---------------------------------------------------------
+
+c
+
+Fit three logistic regression models predicting whether a respondent wears glasses/contact lenses for distance vision. Predictors:
+
+age
+
+age, race, gender
+
+age, race, gender, Poverty Income ratio
+
+Produce a table presenting the estimated odds ratios for the coefficients in each model, along with the sample size for the model, the pseudo-$R^2$, and AIC values.
+
+Fit with age
+
+ologit viq220 ridageyr
+
+Iteration 0:   log likelihood = -4475.8135  
+Iteration 1:   log likelihood = -4254.1928  
+Iteration 2:   log likelihood = -4253.8968  
+Iteration 3:   log likelihood = -4253.8968  
+
+Ordered logistic regression                             Number of obs =  6,547
+                                                        LR chi2(1)    = 443.83
+                                                        Prob > chi2   = 0.0000
+Log likelihood = -4253.8968                             Pseudo R2     = 0.0496
+
+------------------------------------------------------------------------------
+      viq220 | Coefficient  Std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    ridageyr |  -.0246801   .0012053   -20.48   0.000    -.0270424   -.0223179
+-------------+----------------------------------------------------------------
+       /cut1 |  -1.261743   .0534363                     -1.366476    -1.15701
+       /cut2 |   7.285519    .708185                      5.897501    8.673536
+------------------------------------------------------------------------------
+
+Fit with age, race, gender
+
+ologit viq220 age ridreth1 riagendr
+
+Iteration 0:   log likelihood = -4475.8135  
+Iteration 1:   log likelihood = -4202.5311  
+Iteration 2:   log likelihood = -4201.4788  
+Iteration 3:   log likelihood = -4201.4786  
+
+Ordered logistic regression                             Number of obs =  6,547
+                                                        LR chi2(3)    = 548.67
+                                                        Prob > chi2   = 0.0000
+Log likelihood = -4201.4786                             Pseudo R2     = 0.0613
+
+------------------------------------------------------------------------------
+      viq220 | Coefficient  Std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+         age |  -.2402447   .0119532   -20.10   0.000    -.2636724   -.2168169
+    ridreth1 |  -.1277227    .022447    -5.69   0.000    -.1717181   -.0837274
+    riagendr |  -.4914168   .0525431    -9.35   0.000    -.5943994   -.3884342
+-------------+----------------------------------------------------------------
+       /cut1 |   -2.47918   .1215238                     -2.717362   -2.240998
+       /cut2 |   6.119137   .7152307                       4.71731    7.520963
+------------------------------------------------------------------------------
+
+Fit with age, race, gender, Poverty Income ratio
+
+ologit viq220 ridageyr ridreth1 riagendr indfmpir
+
+Iteration 0:   log likelihood =  -4277.647  
+Iteration 1:   log likelihood = -3985.4506  
+Iteration 2:   log likelihood = -3983.9456  
+Iteration 3:   log likelihood = -3983.9454  
+
+Ordered logistic regression                             Number of obs =  6,249
+                                                        LR chi2(4)    = 587.40
+                                                        Prob > chi2   = 0.0000
+Log likelihood = -3983.9454                             Pseudo R2     = 0.0687
+
+------------------------------------------------------------------------------
+      viq220 | Coefficient  Std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    ridageyr |  -.0237628   .0012615   -18.84   0.000    -.0262353   -.0212903
+    ridreth1 |  -.0936067    .023549    -3.97   0.000    -.1397619   -.0474515
+    riagendr |  -.5150898   .0540879    -9.52   0.000    -.6211002   -.4090794
+    indfmpir |  -.1418921   .0170017    -8.35   0.000    -.1752148   -.1085693
+-------------+----------------------------------------------------------------
+       /cut1 |  -2.629864   .1283504                     -2.881426   -2.378302
+       /cut2 |   5.943721   .7160353                      4.540318    7.347124
+------------------------------------------------------------------------------
+
+d
+
+From the third model from the previous part, discuss whether the odds of men and women being wears of glasess/contact lenses for distance vision differs. Test whether the proportion of wearers of glasses/contact lenses for distance vision differs between men and women. Include the results of the test and its interpretation.
+
+Problem 2 Sakila
+
+a
+
+Aside from English, what language is most common for films? Answer this with a single SQL query.
+
+{r}
+sakila <- dbConnect(RSQLite::SQLite(), "sakila_master.db")
+dbListTables(sakila)
+
+{r}
+dbListFields(sakila, "language")
+
+{r}
+dbGetQuery(sakila, "SELECT * FROM language LIMIT 1000")
+
+dbGetQuery(sakila, "SELECT language_id, COUNT(language_id) AS `value_occurrence` FROM film GROUP BY language_id ORDER BY `value_occurrence` DESC")
+
+From the results, we see that the most common language is English, and there are no more other languages in this dataset.
+
+b
+
+What genre of movie is the most common in the data, and how many movies are of this genre?
+
+{r}
+dbGetQuery(sakila, "select * from category limit 100")
+
+First we extract the category table to know the corresponding categories of numbers.
+
+Using R to solve it
+
+{r}
+two_b_table<-dbGetQuery(sakila, "select * from film_category limit 1000")
+two_b_table|>group_by(category_id)|>summarise(counts=n())|>arrange(desc(counts))
+
+The most common type id is 15, which indicates for Sports type, and there are 73 movies belong to this genre.
+
+Using SQL to solve it
+
+{r}
+head(dbGetQuery(sakila, "select * from film_category limit 1000"))
+
+dbGetQuery(sakila, "SELECT category_id, COUNT(category_id) AS `value_occurrence` FROM film_category GROUP BY category_id ORDER BY `value_occurrence` DESC")
+
+From the data we can know that the most common film type is Sports, and it counts for 74 movies in total.
+
+c
+
+Identify which country or countries have exactly 9 customers.
+
+Using R to solve it
+
+{r}
+two_c_table<-dbGetQuery(sakila, "select * from customer_list limit 1000")
+two_c_table|>group_by(country)|>summarise(counts=n())|>arrange(desc(counts))|>filter(counts=="9")
+
+The country with exactly 9 customers is the United Kingdom
+
+{r}
+dbGetQuery(sakila, "SELECT country COUNT(country) AS `value_occurrence` FROM customer_list ORDER BY `value_occurrence` DESC")
+
+From the result we can see that the country has exactly 9 customers is the U.K.
+
+{r}
+dbGetQuery(sakila, "SELECT country, COUNT(country) AS `value_occurrence` FROM customer_list GROUP BY country ORDER BY `value_occurrence` DESC")
+
+dbGetQuery(sakila, "SELECT country, COUNT(country) AS `value_occurrence` FROM customer_list
+           WHERE value_occurrence=='9'")
+
+Problem 3 US Records
+
+a 
+
+What proportion of email addresses are hosted at a domain with TLD ".net"? (E.g. in the email, "angrycat@freemail.org", "freemail.org" is the domain, with TLD (top-level domain) ".org".)
+
+{r}
+the_table<-read.csv("us-500.csv")
+library(tidyverse)
+the_table
+
+{r}
+grepl(".net",the_table$email)|>sum(na.rm=TRUE)
+
+There are 73 addresses hosted at a domain with TLD "net", and thus the proportion would be 73/500=0.146
+
+b
+
+What proportion of email addresses have at least one non alphanumeric character in them?
+
+{r}
+grepl("[^a-zA-Z0-9@.]",the_table$email)|>sum(na.rm=TRUE)
+
+There are 124 email address containing at least one non-alphanumeric character, and thus the proportion would be 124/500=0.248
+
+c
+
+What is the most common area code amongst all phone numbers?
+
+{r}
+the_table_2<-the_table%>%
+  mutate(area_code_1=substr(the_table$phone1, 1, 3))%>%
+  mutate(area_code_2=substr(the_table$phone2, 1, 3))
+
+the_table_2%>%
+  group_by (area_code_1)|>summarize(counts=n())|>arrange(desc(counts))
+
+the_table_2%>%
+  group_by (area_code_2)|>summarize(counts=n())|>arrange(desc(counts))
+
+From the result we can see that the most common area code is 973.
+
+We can also notice that even there are two columns for phone, each household has the same area code for their phones since their addresses are fixed, so count on area_code_1 or area_code_2 would yield the same results.
+
+d
+
+Produce a histogram of the log of the apartment numbers for all addresses. (You may assume any number after the street is an apartment number.)
+
+{r}
+the_table_2 <- the_table %>%
+   mutate(unit = str_extract(address, "#[A-Za-z0-9]+"))%>%
+   mutate(unit_2 = str_extract(unit, "[A-Za-z0-9]+"))%>%
+   na.omit(unit_2)%>%
+   mutate(unit_3=as.numeric(unit_2))
+
+head(the_table_2)
+
+Here I mutate twice to keep the pure number in the address column.
+
+{r}
+ggplot(the_table_2, aes(x = unit_3))+geom_histogram()+xlab("address")+scale_x_log10()
++ggtitle("histogram of the log of the apartment numbers for all addresses")
+
+The Benford's law states that in many real-life sets of numerical data, the leading digit is likely to be small. In sets that obey the law, the number 1 appears as the leading significant digit about 30% of the time, while 9 appears as the leading significant digit less than 5% of the time.
+
+From the rough pattern, I think it follows the Benford's law, as the number with small digits appears much more frequently than large digits.
+
+I do think that the apartment number should be treated as real data. Because it is associated with the length of the road. The longer the road is, the (possibly) larger apartment number would be, and in real life, it is more common to have shorter road than long road. The length of roads also follows the Benford's law.
+
+f
+
+Repeat your analysis of Benford’s law on the last digit of the street number.
+
+{r}
+# just some notes, please do not grade them unlist(strsplit(the_table$address," ")){extract(the_table, "address", c("Streetname", "HouseNumber", "Apt"), "(\\D+)(\\d.*)(\\D+)")}
+
+{r}
+#pattern <- "^(\\d+)\\s"
+the_table_3 <- the_table %>%
+   mutate(st_num =as.numeric(str_extract(address, "\\d+")))%>%
+  mutate(last_digit = st_num %% 10)
+
+the_table_3
+
+{r}
+ggplot(the_table_3, aes(x = last_digit))+geom_histogram()+xlab("last digit")+scale_x_log10()
++ggtitle("The Frequency of the Last Digit of Street Number")
+
+From Wikipedia, the logarithm-histogram of Benford Law should be like
+
+Obviously it's not similar to what we got from above. So I think the last digit of street number doesn't follow the Benford law.
+

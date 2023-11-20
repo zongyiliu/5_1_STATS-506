@@ -1,0 +1,169 @@
+---
+title: "Problem_Set_4"
+author: "Zongyi Liu"
+date: "2023-10-12"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1: Tidyverse
+
+```{r}
+library(nycflights13)
+library(tidyverse)
+```
+
+## a. Generate Tables
+
+Generate a table (which can just be a nicely printed tibble) reporting the mean and median departure delay per airport.
+
+```{r}
+table_1 <-
+  flights %>%
+  group_by(dest) %>%
+  summarise(Mean = mean(dep_delay, na.rm = TRUE),Median = median(dep_delay, na.rm = TRUE))%>%
+  inner_join(airports, by = c(dest = "faa"))%>%
+  select(Mean,Median,name)%>%
+  arrange(desc(Mean))
+
+print(table_1, n = nrow(table_1))
+```
+
+Generate a second table (which again can be a nicely printed tibble) reporting the mean and median arrival delay per airport. Exclude any destination with under 10 flights. Do this exclusion through code, not manually.
+
+```{r}
+table_2 <-
+  flights %>%
+  group_by(dest) %>%
+  # arrival delay NA's are cancelled flights
+  summarise(Mean = mean(arr_delay, na.rm = TRUE),Median = median(arr_delay, na.rm = TRUE),totalflights=n())%>%filter(totalflights>9)%>%
+  inner_join(airports, by = c(dest = "faa"))%>%
+  select(Mean,Median,name)%>%
+  arrange(desc(Mean))
+print(table_2, n = nrow(table_2))
+```
+
+Also,
+
+-   Order both tables in descending mean delay.
+
+-   Both tables should use the airport *names* not the airport *codes*.
+
+-   Both tables should print all rows.
+
+## b
+
+How many flights did the aircraft model with the fastest average speed take? Produce a tibble with 1 row, and entries for the model, average speed (in MPH) and number of flights.
+
+```{r}
+library(nycflights13)
+library(dplyr)
+```
+
+```{r}
+flights %>%left_join(planes, by = "tailnum")%>%group_by(model) %>% select(speed, tailnum)%>%summarize(num_flights = n())%>%arrange (desc(num_flights))%>%as_tibble()
+```
+
+## Problem 2: `get_temp()`
+
+Load the Chicago NNMAPS data we used in the visualization lectures. Write a function `get_temp()` that allows a user to request the average temperature for a given month. The arguments should be:
+
+-   `month`: Month, either a numeric 1-12 or a string.
+
+-   `year`: A numeric year.
+
+-   `data`: The data set to obtain data from.
+
+-   `celsius`: Logically indicating whether the results should be in celsius. Default `FALSE`.
+
+-   `average_fn`: A function with which to compute the mean. Default is `mean`.
+
+The output should be a numeric vector of length 1. The code inside the function should, as with the rest of this problem, use the **tidyverse**. Be sure to sanitize the input.
+
+```{r}
+library(dlnm)
+data(chicagoNMMAPS)
+
+nnmaps<-chicagoNMMAPS
+```
+
+```{r}
+library(tidyverse)
+
+# Define a function to get the average temperature
+get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
+  # Sanitize input
+  if (!is.numeric(year) || year <= 0) {
+    stop("Invalid year. Please provide a valid numeric year.")
+  }
+  
+  # Convert month to numeric if it's a string
+  if (is.character(month)) {
+    month <- match(tolower(month), tolower(month.abb))
+    if (is.na(month)) {
+      stop("Invalid month name. Please provide a valid month.")
+    }
+  }
+  
+  # Filter the data for the specified month and year
+  filtered_data <- data %>%
+    filter(month == month, year == year) #  
+  
+  if (nrow(filtered_data) == 0) {
+    stop("No data available for the specified month and year.")
+  }
+  
+  # Calculate the average temperature using the provided function
+  avg_temp <- filtered_data %>%
+    summarise(average_temp = average_fn(Temperature)) %>%
+    pull(average_temp)
+  
+  # Convert to Celsius if requested
+  if (celsius) {
+    avg_temp <- (avg_temp - 32) * 5/9
+  }
+  
+  return(avg_temp)
+}
+
+# Usage example:
+# Get the average temperature for April 1999 in Fahrenheit
+avg_temp_fahrenheit <- get_temp(month = "Apr", year = 1999, data = nnmaps)
+print(avg_temp_fahrenheit)
+
+# Get the average temperature for April 1999 in Celsius
+avg_temp_celsius <- get_temp(month = "Apr", year = 1999, data = nnmaps, celsius = TRUE)
+print(avg_temp_celsius)
+```
+
+# Problem 3 SAS
+
+This problem should be done entirely within SAS.
+
+Access the [RECS 2020 data](https://www.eia.gov/consumption/residential/data/2020/index.php?view=microdata) and download a copy of the data. You may import the CSV or load in the `sas7bdat` file directly. (This is **not** the 2009 version we used in lecture.) You'll probably also need the "Variable and response cookbook" to identify the proper variables. Load or import the data into SAS.
+
+a.  What state has the highest percentage of records? What percentage of all records correspond to Michigan? (Don't forget to account for the sampling weights!)
+
+b.  Generate a histogram of the total electricity cost in dollars, amongst those with a strictly positive cost.
+
+c.  Generate a histogram of the log of the total electricity cost.
+
+d.  Fit a linear regression model predicting the log of the total electricity cost based upon the number of rooms in the house and whether or not the house has a garage. (Don't forget weights.)
+
+e.  Use that model to generate predicted values and create a scatterplot of predicted total electricity cost vs actual total electricity cost (**not** on the log scale).
+
+```{r}
+data<-read.csv("recs2020_public_v5.csv")
+data
+```
+
+# Problem 4 Multiple Tools
+
+Take a look at the Codebook. For very minor extra credit, how was the Codebook generated? (No loss of points if you skip this.)
+
+> The codebook contains the variable names, labels, and tabulations of responses for the questions asked in the survey.

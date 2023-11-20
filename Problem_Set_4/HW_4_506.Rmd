@@ -1,0 +1,506 @@
+---
+title: "STATS 506 HW4"
+author: "Zongyi Liu"
+date: "2023-10-12"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+> The Github link for this assignment: <https://github.com/zongyiliu/15_STATS_506/tree/main/Problem_Set_4>
+
+# Problem 1: Tidyverse
+
+## a
+
+Generate a table (which can just be a nicely printed tibble) reporting the mean and median departure delay per airport.
+
+```{r}
+library(nycflights13)
+library(tidyverse)
+```
+
+```{r}
+table_1 <- flights %>%
+  group_by(origin) %>%
+  summarise(
+    mean_departure_delay = mean(dep_delay, na.rm = TRUE),
+    median_departure_delay = median(dep_delay, na.rm = TRUE)
+  ) %>%
+  left_join(airports, by = c("origin" = "faa")) %>%
+  select(name, mean_departure_delay, median_departure_delay) %>%
+  arrange(desc(mean_departure_delay))
+
+print(table_1, n = nrow(table_1))
+```
+
+Generate a second table (which again can be a nicely printed tibble) reporting the mean and median arrival delay per airport. Exclude any destination with under 10 flights. Do this exclusion through code, not manually.
+
+```{r}
+table_2 <-
+  flights %>%
+  group_by(dest) %>%
+  summarise(Mean_arr_delay = mean(arr_delay, na.rm = TRUE),Median_arr_delay = median(arr_delay, na.rm = TRUE),total_number=n())%>%filter(total_number>9)%>%
+  inner_join(airports, by = c(dest = "faa"))%>%
+  select(Mean_arr_delay,Median_arr_delay,name)%>%
+  arrange(desc(Mean_arr_delay))
+print(table_2, n = nrow(table_2))
+```
+
+## b
+
+How many flights did the aircraft model with the fastest average speed take? Produce a tibble with 1 row, and entries for the model, average speed (in MPH) and number of flights.
+
+> There is a \`speed\` term in the dataset, however, we can not use it, as there are too many missing values. So we would use air time and distance in table flights to calculate average speed.
+
+```{r}
+P1b<-flights %>% 
+      left_join(planes, by=c("tailnum")) %>% 
+      select(air_time, distance, model) %>% 
+      na.omit() %>% #filter missing at first
+      group_by(model) %>% 
+      summarise(
+         air_time = sum(air_time, na.rm=TRUE)/60, distance = sum(distance, na.rm=TRUE), avg_speed = distance/air_time, count = n()
+      ) %>% 
+      arrange(desc(avg_speed)) %>% 
+      select(model, avg_speed, count)%>%head(1)%>%print()
+# If we use the speed it provided it would be like 432
+```
+
+# Problem 2: `get_temp()`
+
+Load the Chicago NNMAPS data we used in the visualization lectures. Write a function `get_temp()` that allows a user to request the average temperature for a given month. The arguments should be:
+
+-   `month`: Month, either a numeric 1-12 or a string.
+
+-   `year`: A numeric year.
+
+-   `data`: The data set to obtain data from.
+
+-   `celsius`: Logically indicating whether the results should be in celsius. Default `FALSE`.
+
+-   `average_fn`: A function with which to compute the mean. Default is `mean`.
+
+The output should be a numeric vector of length 1. The code inside the function should, as with the rest of this problem, use the **tidyverse**. Be sure to sanitize the input.
+
+```{r}
+library(dlnm)
+data(chicagoNMMAPS)
+```
+
+```{r p2}
+nnmaps <- read.csv("chicago-nmmaps.csv")
+
+get_temp <- function(month, year, data, celsius=FALSE, average_fn=mean){
+  # Check the month input
+  if ( !(is.character(month) || is.numeric(month) ) )
+    stop("Invalid month string")
+  else if (is.character(month)){
+    if (is.na( mat <- match(month, c(month.abb, month.name))))
+        stop("Invalid month string")
+    else
+      month.clr <- ifelse(mat<13, mat, mat-12)
+  }
+  else{
+    if( !(month.clr <-month) %in% seq(1, 12))
+      stop("Invalid month string")
+  }
+  # Check the year input
+  if ( ! (is.numeric(year) && (year>0) && (year%%1==0)))
+    stop("Invalid year input")
+  year.clr <- as.integer(year)
+  if (!is.data.frame(data))
+    stop("data must be a data.frame or tibble.")
+  if (!is.logical(celsius))
+    stop("data must be TRUE or FALSE")
+  if (!is.function(average_fn))
+    stop("average_fn must be a function")
+  # Use the temperatur and convert it to Celsius
+  temperature <- data %>% 
+         filter(month==month.abb[month.clr],
+                year==year.clr) %>% 
+         summarise(temp = average_fn(temp)) %>% 
+         mutate(celsius.avg = (temp-32)*5/9
+         ) %>% 
+         select(ifelse(celsius, 2, 1)) %>% 
+         pull()
+  if (is.na(temperature))
+    stop("Data out of the range")
+  return (temperature)
+}
+
+# check the function with examples provided
+try(get_temp("Apr", 1999, data = nnmaps))
+try(get_temp("Apr", 1999, data = nnmaps, celsius = TRUE))
+try(get_temp(10, 1998, data = nnmaps, average_fn = median))
+try(get_temp(13, 1998, data = nnmaps))
+try(get_temp(2, 2005, data = nnmaps))
+try(get_temp("November", 1999, data =nnmaps, celsius = TRUE,
+         average_fn = function(x) {
+           x %>% sort -> x
+           x[2:(length(x) - 1)] %>% mean %>% return
+         }))
+```
+
+# **Problem 3: SAS**
+
+This problem should be done entirely within SAS.
+
+Access the [RECS 2020 data](https://www.eia.gov/consumption/residential/data/2020/index.php?view=microdata) and download a copy of the data. You may import the CSV or load in the `sas7bdat` file directly. (This is **not** the 2009 version we used in lecture.) You'll probably also need the "Variable and response cookbook" to identify the proper variables. Load or import the data into SAS.
+
+a.  Fit a linear regression model predicting the log of the total electricity cost based upon the number of rooms in the house and whether or not the house has a garage. (Don't forget weights.)
+
+b.  Use that model to generate predicted values and create a scatterplot of predicted total electricity cost vs actual total electricity cost (**not** on the log scale).
+
+> The result file in Github: <https://github.com/zongyiliu/15_STATS_506/blob/main/Problem_Set_4/HW_4_Q3.html>
+
+## a
+
+Highest Record for States
+
+``` sas
+/* a */
+/* Inport the data */
+PROC IMPORT DATAFILE='/home/u63636997/recs2020_public_v5.csv';
+
+/* Import the CSV file */
+proc import datafile=recs2020
+    out=recs2020_data
+    dbms=csv
+    replace;
+    getnames=yes;
+run;
+
+/* Get table of percent of each states with sampling weight */
+proc freq data = recs2020_data;
+    TABLES state_name / OUT = state_freq;
+    WEIGHT NWEIGHT;
+run;
+
+/* Sort the table with descending order*/
+proc sort data = state_freq;
+    BY DESCENDING COUNT;
+run;
+
+/* Get the state of highest percentage */
+proc print data = state_freq(obs=1);
+run;
+```
+
+We can see that California has the highest percentage of records (10.67%), and Michigan's percentage is 3.17%.
+
+## b
+
+Generate a histogram of the total electricity cost in dollars, amongst those with a strictly positive cost.
+
+``` sas
+/* b */
+/* Get Data for Michigan*/
+data Michigan;
+    SET state_freq;
+    WHERE state_name = 'Michigan';
+run;
+
+proc print data = Michigan;
+run;
+```
+
+### c
+
+Generate a histogram of the log of the total electricity cost.
+
+``` sas
+/* c */
+/* Create a histogram of the log of the total electricity cost */
+proc sql;
+  create table PositiveCost as
+  select DOLLAREL, log(DOLLAREL) as logDOLLAREL
+  from recs2020
+  where DOLLAREL > 0;
+quit;
+
+proc sgplot data=PositiveCost;
+  histogram DOLLAREL / binwidth=200 legendlabel="Total Electricity Cost (Dollars)";
+  xaxis label="Total Electricity Cost (Dollars)";
+  yaxis label="Frequency";
+run;
+
+proc sgplot data=PositiveCost;
+  histogram logDOLLAREL / binwidth=0.2 legendlabel="Log of Total Electricity Cost (Dollars)";
+  xaxis label="Log of Total Electricity Cost (Dollars)";
+  yaxis label="Frequency";
+run;
+```
+
+### d
+
+``` sas
+/* d */
+/* Create a dataset with weighted values */
+data recs2020_weighted;
+  set recs2020_data;
+  weight = NWEIGHT; 
+run;
+
+/* Fit a linear regression model with weights */
+proc reg data=recs2020_weighted plots=none;
+  model LOG_DOLLAREL = TOTROOMS PRKGPLC1;
+  output out=reg_results predicted=PredictedDOLLAREL residual=ResidualDOLLAREL;
+  title 'Linear Model';
+run;
+```
+
+### e
+
+Use that model to generate predicted values and create a scatterplot of predicted total electricity cost vs actual total electricity cost (**not** on the log scale).
+
+``` sas
+/* e */
+/* Create a dataset with predicted and actual values (not on the log scale) */
+data reg_results_nolog;
+  set reg_results;
+  ActualDOLLAREL = exp(LOG_DOLLAREL); /* Convert back to the original scale */
+  PredictedDOLLAREL = exp(PredictedDOLLAREL);
+run;
+
+/* Create a scatterplot of predicted vs actual total electricity cost 
+(not on the log scale) */
+proc sgplot data=reg_results_nolog;
+  scatter x=ActualDOLLAREL y=PredictedDOLLAREL;
+  xaxis label="Actual Total Electricity Cost";
+  yaxis label="Predicted Total Electricity Cost";
+  title "Scatterplot of Predicted vs. Actual Total Electricity Cost 
+  (Not on Log Scale)";
+run;
+```
+
+# Problem 4 Multiple Tools
+
+## a
+
+Take a look at the Codebook. For very minor extra credit, how was the Codebook generated? (No loss of points if you skip this.)
+
+> The codebook contains the variable names, labels, and tabulations of responses for the questions asked in the survey.
+>
+> This codebook was generated by Stata, because it uses data types such as "byte," "int," and "long" to represent various levels of integer precision.
+
+## b
+
+Import the data into SAS (you can load the SAS data directly or import the CSV) and use `proc sql` to select only the variables you'll need for your analysis, as well as subsetting the data if needed.
+
+``` sas
+/* Variables that we will use:
+B3: Compared to 12 months ago, would you say that you (and your family) are better off, the same, or worse off financially?
+ND2: Five years from now, do you think that the chance that you will experience a natural disaster or severe weather event will be higher, lower or about the same as it is now?
+B7_b: In this country -How would you rate economic conditions today
+GH1: This section will ask some questions about your home and your car. Do you (and/or your spouse or partner) (require modify)
+ppeducat: Education 
+ppethm:  Race / Ethnicity 
+weight_pop: Post-stratification weight - Main qualified
+respondents scaled to U.S. population 
+CaseID
+*/
+
+/* Specify the file path */
+filename mydata '/home/u63636997/public2022.csv';
+
+/* Import the CSV file */
+proc import datafile=mydata
+    out=public2022_data
+    dbms=csv
+    replace;
+    getnames=yes;
+run;
+
+data public2022_data;
+    set public2022_data;
+    keep CaseID caseid2021  caseid2020  caseid2019  weight_pop  B2  B3  B7_b 
+    GH1 ND2 ppeducat ppethm;
+run;
+```
+
+## c
+
+Get the data out of SAS and into Stata.
+
+``` stata
+proc export data=public2022_data
+    outfile='/home/u63636997/new_mydata.csv'  
+    dbms=csv replace;           
+run;
+```
+
+## d
+
+Demonstrate that you've successfully extracted the appropriate data by showing the number of observations and variables.
+
+``` stata
+. clear
+
+. import sas CaseID family_finan nature_disa econ_cond home_have education race weight using "C:\Users\ego\Desktop\Problem_Set_4\new_mydata.csv", clear
+(8 vars, 11,667 obs)
+
+. 
+. describe
+
+Contains data
+ Observations:        11,667                  
+    Variables:             8                  
+-----------------------------------------------------------------------------------------------------------
+Variable      Storage   Display    Value
+    name         type    format    label      Variable label
+-----------------------------------------------------------------------------------------------------------
+CaseID          int     %10.0g                CaseID 2022
+family_finan    byte    %10.0g                Compared to 12 months ago, would you say that you (and your
+                                                family) are better o
+nature_disa     byte    %10.0g                Five years from now, do you think that the chance that you
+                                                will experience a nat
+econ_cond       byte    %10.0g                In this country - How would you rate economic conditions
+                                                today:
+home_have       byte    %10.0g                
+education       byte    %10.0g                Education (4 Categories)
+race            byte    %10.0g                Race / Ethnicity
+weight          double  %10.0g                Post-stratification weight - Main qualified respondents
+                                                scaled to U.S. populatio
+-----------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+```
+
+### e
+
+The response variable is a Likert scale; convert it to a binary of worse off versus same/better.
+
+``` stata
+// Recode the variable as 1-2 worse off and 3-5 better off
+
+recode family_finan (1/2=0) (3/5=1), gen(family_finan_bin)
+(11,667 differences between family_finan and family_finan_bin)
+```
+
+### f
+
+Carry out a logisitic regression model accounting for the complex survey design. Be sure to treat variables you think should be categorical appropriately. From these results, provide an answer to the researchers question of interest.
+
+Notice that the model does not provide a pseudo-R has the functionality to do this.
+
+> We calculate both coefficients and odds ratios for the logistic regression model.
+
+``` stata
+. svyset CaseID [pw=weight]
+
+Sampling weights: weight
+             VCE: linearized
+     Single unit: missing
+        Strata 1: <one>
+ Sampling unit 1: CaseID
+           FPC 1: <zero>
+
+. 
+. svy: logistic family_finan_bin nature_disa econ_cond i.home_have education i.race
+(running logistic on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata =      1                        Number of obs   =      11,667
+Number of PSUs   = 11,667                        Population size = 255,114,223
+                                                 Design df       =      11,666
+                                                 F(9, 11658)     =       94.24
+                                                 Prob > F        =      0.0000
+
+----------------------------------------------------------------------------------
+                 |             Linearized
+family_finan_bin | Odds ratio   std. err.      t    P>|t|     [95% conf. interval]
+-----------------+----------------------------------------------------------------
+     nature_disa |   1.033374   .0315333     1.08   0.282     .9733756    1.097071
+       econ_cond |   2.650293   .0966773    26.72   0.000     2.467406    2.846736
+                 |
+       home_have |
+              2  |   1.053186   .0572268     0.95   0.340     .9467788    1.171552
+              3  |    1.45047   .1405322     3.84   0.000      1.19958    1.753831
+                 |
+       education |    1.09333   .0267164     3.65   0.000     1.042195    1.146973
+                 |
+            race |
+              2  |   2.041822   .1646132     8.85   0.000     1.743357    2.391385
+              3  |   1.437889   .1698341     3.07   0.002     1.140713    1.812484
+              4  |   1.181915   .0838862     2.35   0.019      1.02841    1.358334
+              5  |   .9095113   .1236092    -0.70   0.485     .6968056    1.187147
+                 |
+           _cons |   .2050857   .0276544   -11.75   0.000     .1574507    .2671321
+----------------------------------------------------------------------------------
+Note: _cons estimates baseline odds.
+
+. 
+. 
+. svy: logit family_finan_bin nature_disa econ_cond i.home_have education i.race
+(running logit on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata =      1                        Number of obs   =      11,667
+Number of PSUs   = 11,667                        Population size = 255,114,223
+                                                 Design df       =      11,666
+                                                 F(9, 11658)     =       94.24
+                                                 Prob > F        =      0.0000
+
+----------------------------------------------------------------------------------
+                 |             Linearized
+family_finan_bin | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-----------------+----------------------------------------------------------------
+     nature_disa |   .0328291   .0305149     1.08   0.282    -.0269852    .0926435
+       econ_cond |   .9746702    .036478    26.72   0.000     .9031672    1.046173
+                 |
+       home_have |
+              2  |   .0518196   .0543369     0.95   0.340    -.0546898     .158329
+              3  |   .3718874   .0968874     3.84   0.000     .1819719    .5618028
+                 |
+       education |   .0892277   .0244358     3.65   0.000     .0413294    .1371259
+                 |
+            race |
+              2  |   .7138425   .0806207     8.85   0.000     .5558123    .8718726
+              3  |   .3631758   .1181135     3.07   0.002     .1316536    .5946981
+              4  |   .1671364   .0709748     2.35   0.019      .028014    .3062588
+              5  |  -.0948479   .1359072    -0.70   0.485    -.3612488     .171553
+                 |
+           _cons |  -1.584327   .1348433   -11.75   0.000    -1.848643   -1.320012
+----------------------------------------------------------------------------------
+
+.
+end of do-file
+```
+
+> If we take control for all other variables, the odds ration for the respondent's belief of natural disasters is 1.033374.
+>
+> This means that a one-unit increase is associated with the financial situation of the family; if the respondent believes the chance of a natural disaster is lower, his or her situation would seem to be better.
+>
+> However, we should see that the p-value for the term `nature_disa` is far more than 0.05, which is 0.28, which means it is statistically insignificant. So it would be doubtful to confirm that the thought on the future weather condition would impact the financial situation of the respondent's family.
+
+### g
+
+Get the data out of Stata and into R
+
+``` stata
+. save "Users\ego\Desktop\Problem_Set_4\variables_req.dta"
+```
+
+### h
+
+Use the `survey` package to obtain the pseudo $R^2$
+
+```{r}
+library(haven)
+library(survey)
+stata_data <- read_stata("variables_req.dta")
+
+desg <- svydesign(id = ~ CaseID, weight = ~ weight, data = stata_data)
+
+m1 <- svyglm(family_finan_bin ~ nature_disa + econ_cond +
+                                as.factor(home_have) + education + 
+                                as.factor(race), design=desg, family=quasibinomial())
+summary(m1)
+
+psrsq(m1)
+```
+
+The pseudo-$R^2$ is 0.1069493, which is the same as is from Stata.

@@ -1,0 +1,578 @@
+---
+title: "Homework_3"
+author: "Zongyi Liu"
+date: "2023-10-05"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+> The Github link for this assignment: <https://github.com/zongyiliu/15_STATS_506/tree/main/Problem_Set_3>
+
+# Problem 1 Vision
+
+## a
+
+-   Download the file VIX_D from this location, and determine how to read it into Stata. Then download the file DEMO_D from this location. Note that each page contains a link to a documentation file for that data set. Merge the two files to create a single Stata dataset, using the SEQN variable for merging. Keep only records which matched. Print our your total sample size, showing that it is now 6,980.
+
+**One way is to create dta files using Stata**
+
+> We can use the following codes to import and merge the datasets
+
+``` stata
+. import sasxport5 VIX_D
+
+. save "/Applications/Stata/VIX_D.dta"
+file /Applications/Stata/VIX_D.dta saved
+
+. import sasxport5 DEMO_D
+
+. save "/Applications/Stata/DEMO_D.dta"
+file /Applications/Stata/DEMO_D.dta saved
+```
+
+> This will create two new dta files for VIX and DEMO
+
+``` stata
+Result                      Number of obs
+    -----------------------------------------
+    Not matched                         3,368
+        from master                     3,368  (_merge==1)
+        from using                          0  (_merge==2)
+
+    Matched                             6,980  (_merge==3)
+    -----------------------------------------
+
+. merge 1:1 seqn using "/Applications/Stata/DEMO_D.dta"
+```
+
+![](images/Screen%20Shot%202023-10-09%20at%206.31.15%20PM.png){width="389"}
+
+``` stata
+Result                      Number of obs
+    -----------------------------------------
+    Not matched                         3,368
+        from master                     3,368  (_merge==1)
+        from using                          0  (_merge==2)
+
+    Matched                             6,980  (_merge==3)
+    -----------------------------------------
+
+. merge 1:1 seqn using "/Applications/Stata/DEMO_D.dta"
+```
+
+> The results are as above, and we can see that the number of entries are 6980.
+
+**The second way: Using R command to deal with XPT files**
+
+```{r}
+library(haven)
+
+VIX_D <- read_xpt("/Users/ego/Desktop/Problem_Set_3/VIX_D.XPT")
+
+write_dta(VIX_D, "/Users/ego/Desktop/Problem_Set_3/VIX_D.dta")
+
+DEMO_D <- read_xpt("/Users/ego/Desktop/Problem_Set_3/DEMO_D.XPT")
+
+write_dta(DEMO_D, "/Users/ego/Desktop/Problem_Set_3/DEMO_D.dta")
+```
+
+```stata
+use "/Users/ego/Desktop/Problem_Set_3/DEMO_D.dta", clear
+```
+
+Then we can merge them
+
+```stata
+merge 1:1 SEQN using "/Users/ego/Desktop/Problem_Set_3/DEMO_D.dta"
+keep if merge==3
+# keep if _merge==3
+# (3,368 observations deleted)
+
+count
+```
+And the result
+
+```stata
+    count
+      6,980
+```
+## b
+
+-   Without fitting any models, estimate the proportion of respondents within each 10-year age bracket (e.g. 0-9, 10-19, 20-29, etc) who wear glasses/contact lenses for distance vision. Produce a nice table with the results.
+
+First to recode the age into separate groups, and we can get results as follows:
+
+``` stata
+. gen age_bracket = int(RIDAGEYR/10)
+
+. gen age_bracket_str = ""
+(6,980 missing values generated)
+
+. replace age_bracket_str = "10-19" if age_bracket == 1
+variable age_bracket_str was str1 now str5
+(2,207 real changes made)
+
+. replace age_bracket_str = "20-29" if age_bracket == 2
+(1,021 real changes made)
+
+. replace age_bracket_str = "30-39" if age_bracket == 3
+(818 real changes made)
+
+. replace age_bracket_str = "40-49" if age_bracket == 4
+(815 real changes made)
+
+. replace age_bracket_str = "50-59" if age_bracket == 5
+(631 real changes made)
+
+. replace age_bracket_str = "60-69" if age_bracket == 6
+(661 real changes made)
+
+. replace age_bracket_str = "70-79" if age_bracket == 7
+(469 real changes made)
+
+. replace age_bracket_str = "80-89" if age_bracket == 8
+(358 real changes made)
+```
+
+``` stata
+tabulate age_bracket_str VIQ220
+```
+
+> The resultant table is generated as follows
+
+``` stata
+           | Glasses/contact lenses worn for
+age_bracke |             distance
+     t_str |         1          2          9 |     Total
+-----------+---------------------------------+----------
+     10-19 |       670      1,418          0 |     2,088 
+     20-29 |       306        631          2 |       939 
+     30-39 |       269        481          0 |       750 
+     40-49 |       286        487          0 |       773 
+     50-59 |       335        274          0 |       609 
+     60-69 |       392        238          0 |       630 
+     70-79 |       299        148          0 |       447 
+     80-89 |       208        103          0 |       311 
+-----------+---------------------------------+----------
+     Total |     2,765      3,780          2 |     6,547 
+```
+
+To see the proportion, we can do this:
+
+    table age_bracket_str VIQ220, statistic(percent)
+
+And the output will be
+
+    -----------------------------------------------------------------
+                    |     Glasses/contact lenses worn for distance   
+                    |           1           2          9        Total
+    ----------------+------------------------------------------------
+    age_bracket_str |                                                
+      10-19         |       10.23       21.66                   31.89
+      20-29         |        4.67        9.64       0.03        14.34
+      30-39         |        4.11        7.35                   11.46
+      40-49         |        4.37        7.44                   11.81
+      50-59         |        5.12        4.19                    9.30
+      60-69         |        5.99        3.64                    9.62
+      70-79         |        4.57        2.26                    6.83
+      80-89         |        3.18        1.57                    4.75
+      Total         |       42.23       57.74       0.03       100.00
+    -----------------------------------------------------------------
+
+## c
+
+-   Fit three logistic regression models predicting whether a respondent wears glasses/contact lenses for distance vision. Predictors:
+
+    1.  age
+
+    2.  age, race, gender
+
+    3.  age, race, gender, Poverty Income ratio
+
+    Produce a table presenting the estimated odds ratios for the coefficients in each model, along with the sample size for the model, the pseudo-$R^2$, and AIC values.
+
+1.  **Fit with age**
+
+> Firstly, we will not consider the entries with 9 in `VIQ220` in the model since it can not provide us information about whether the respondent wears glasses/contactlenses for distance vision.
+
+``` stata
+    keep if VIQ220 == 1 | VIQ220 == 2
+    gen logicalVIQ220 = (VIQ220 == 1)
+```
+
+Then
+
+``` stata
+. logit logicalVIQ220 RIDAGEYR
+
+Iteration 0:   log likelihood = -4457.6265  
+Iteration 1:   log likelihood = -4236.2351  
+Iteration 2:   log likelihood = -4235.9433  
+Iteration 3:   log likelihood = -4235.9433  
+
+Logistic regression                                     Number of obs =  6,545
+                                                        LR chi2(1)    = 443.37
+                                                        Prob > chi2   = 0.0000
+Log likelihood = -4235.9433                             Pseudo R2     = 0.0497
+
+-------------------------------------------------------------------------------
+logicalVIQ220 | Coefficient  Std. err.      z    P>|z|     [95% conf. interval]
+--------------+----------------------------------------------------------------
+     RIDAGEYR |   .0246729   .0012055    20.47   0.000     .0223101    .0270357
+        _cons |   -1.26097   .0534482   -23.59   0.000    -1.365727   -1.156213
+```
+
+2.  **Fit with age, race, gender**
+
+> We should first factorize the variable `RIDRETH1`
+
+``` stata
+gen RIDRETH1_1 = (RIDRETH1 == 1)
+gen RIDRETH1_2 = (RIDRETH1 == 2)
+gen RIDRETH1_3 = (RIDRETH1 == 3)
+gen RIDRETH1_4 = (RIDRETH1 == 4)
+```
+
+Then convert it into a boolean variable
+
+``` stata
+gen logicalRIAGENDR = (RIAGENDR == 1)
+```
+
+The run the regression
+
+``` stata
+logit logicalVIQ220 RIDAGEYR RIDRETH1_1 RIDRETH1_2 RIDRETH1_3 RIDRETH1_4 logicalRIAGENDR
+
+Iteration 0:   log likelihood = -4457.6265  
+Iteration 1:   log likelihood = -4138.3859  
+Iteration 2:   log likelihood = -4136.8807  
+Iteration 3:   log likelihood = -4136.8805  
+
+Logistic regression                                     Number of obs =  6,545
+                                                        LR chi2(6)    = 641.49
+                                                        Prob > chi2   = 0.0000
+Log likelihood = -4136.8805                             Pseudo R2     = 0.0720
+
+---------------------------------------------------------------------------------
+  logicalVIQ220 | Coefficient  Std. err.      z    P>|z|     [95% conf. interval]
+----------------+----------------------------------------------------------------
+       RIDAGEYR |   .0225742   .0012624    17.88   0.000     .0200999    .0250484
+     RIDRETH1_1 |  -.6509919   .1354071    -4.81   0.000    -.9163849   -.3855989
+     RIDRETH1_2 |  -.4946699   .1974205    -2.51   0.012     -.881607   -.1077328
+     RIDRETH1_3 |   .0179388   .1300575     0.14   0.890    -.2369692    .2728468
+     RIDRETH1_4 |    -.38912   .1336348    -2.91   0.004    -.6510394   -.1272006
+logicalRIAGENDR |  -.5020895    .053011    -9.47   0.000    -.6059891   -.3981899
+          _cons |  -.6835841   .1309719    -5.22   0.000    -.9402844   -.4268839
+---------------------------------------------------------------------------------
+```
+
+3.  **Fit with age, race, gender, Poverty Income ratio**
+
+> There are some missing values inside `INDFMPIR`, and we need to remove them
+
+``` stata
+drop if missing(INDFMPIR)
+```
+
+> And 298 entries would be removed
+
+``` stata
+logit logicalVIQ220 RIDAGEYR RIDRETH1_1 RIDRETH1_2 RIDRETH1_3 RIDRETH1_4 logicalRIAGENDR INDFMPIR
+
+Iteration 0:   log likelihood = -4259.5533  
+Iteration 1:   log likelihood = -3948.3256  
+Iteration 2:   log likelihood = -3946.9043  
+Iteration 3:   log likelihood = -3946.9041  
+
+Logistic regression                                     Number of obs =  6,247
+                                                        LR chi2(7)    = 625.30
+                                                        Prob > chi2   = 0.0000
+Log likelihood = -3946.9041                             Pseudo R2     = 0.0734
+
+---------------------------------------------------------------------------------
+  logicalVIQ220 | Coefficient  Std. err.      z    P>|z|     [95% conf. interval]
+----------------+----------------------------------------------------------------
+       RIDAGEYR |   .0221883   .0012949    17.14   0.000     .0196504    .0247263
+     RIDRETH1_1 |  -.5327271   .1401516    -3.80   0.000    -.8074192   -.2580349
+     RIDRETH1_2 |  -.4167045    .202299    -2.06   0.039    -.8132033   -.0202058
+     RIDRETH1_3 |  -.0311981   .1335307    -0.23   0.815    -.2929136    .2305173
+     RIDRETH1_4 |  -.3253425   .1372987    -2.37   0.018    -.5944431    -.056242
+logicalRIAGENDR |  -.5162712    .054305    -9.51   0.000     -.622707   -.4098355
+       INDFMPIR |   .1135978   .0177073     6.42   0.000      .078892    .1483035
+          _cons |  -.9671613   .1428519    -6.77   0.000    -1.247146   -.6871767
+```
+
+> Then we need to produce a table to show the estimated odds ratios for the coefficients in each model, also with the sample size for the model, the pseudo-$R^2$ and AIC values. We will manually set the table for the AIC value, like for the first model
+
+``` stata
+estat ic
+
+Akaike's information criterion and Bayesian information criterion
+
+-----------------------------------------------------------------------------
+       Model |          N   ll(null)  ll(model)      df        AIC        BIC
+-------------+---------------------------------------------------------------
+           . |      6,545  -4457.627  -4235.943       2   8475.887    8489.46
+-----------------------------------------------------------------------------
+Note: BIC uses N = number of observations. See [R] BIC note.
+```
+
+Then we can get a table of results
+
+``` stata
+matrix outputTable = J(3, 10, .)
+matrix rownames outputTable = "model1" "model2" "model3"
+matrix colnames outputTable = "RIDAGEYR" "RIDRETH1_1" "RIDRETH1_2" "RIDRETH1_3" "RIDRETH1_4" "logicalRIAGENDR" "INDFMPIR" "sample size" "pseudo-R square" "AIC value"
+matrix outputTable[1, 1] = exp(0.0246729)
+matrix outputTable[1, 8] = 6545
+matrix outputTable[1, 9] = 0.0497
+matrix outputTable[1, 10] = 8475.887
+matrix outputTable[2, 1] = exp(0.0225742)
+matrix outputTable[2, 2] = exp(-0.6509919)
+matrix outputTable[2, 3] = exp(-0.4946699)
+matrix outputTable[2, 4] = exp(0.0179388)
+matrix outputTable[2, 5] = exp(-0.38912)
+matrix outputTable[2, 6] = exp(-0.5020895)
+matrix outputTable[2, 8] = 6545
+matrix outputTable[2, 9] = 0.0720
+matrix outputTable[2, 10] =  8287.761
+matrix outputTable[3, 1] = exp(0.0221883)
+matrix outputTable[3, 2] = exp(-.5327271)
+matrix outputTable[3, 3] = exp(-.4167045)
+matrix outputTable[3, 4] = exp(-.0311981)
+matrix outputTable[3, 5] = exp(-.3253425)
+matrix outputTable[3, 6] = exp(-.5162712)
+matrix outputTable[3, 7] = exp(.1135978)
+matrix outputTable[3, 8] = 6247
+matrix outputTable[3, 9] = 0.0734
+matrix outputTable[3, 10] =  87909.808
+matrix list outputTable
+```
+
+From which we can get
+
+``` stata
+outputTable[3,10]
+            RIDAGEYR    RIDRETH1_1    RIDRETH1_2    RIDRETH1_3    RIDRETH1_4  logicalRIA~R
+model1     1.0249798             .             .             .             .             .
+model2     1.0228309     .52152822     .60977216     1.0181007     .67765295     .60526464
+model3     1.0224363     .58700197     .65921569     .96928354     .72227993     .59674153
+
+            INDFMPIR   sample size  pseudo-R s~e     AIC value
+model1             .          6545         .0497      8475.887
+model2             .          6545          .072      8287.761
+model3     1.1203014          6247         .0734     87909.808
+```
+
+## d
+
+-   From the third model from the previous part, discuss whether the *odds* of men and women being wears of glasess/contact lenses for distance vision differs. Test whether the *proportion* of wearers of glasses/contact lenses for distance vision differs between men and women. Include the results of the test and its interpretation.
+
+> From previous manipualtion, we can see that in this model the coefficient fitted value before predictor logicalRIAGENDR is -0.5162712, which means that setting all others the same, woman are more likely to wear glasses/contact lenses relative to men. Also, the coefficient fitted value has a p-value smaller than 0.05 (and close to 0 in the z-test), showing it is statistically significant. So we can say that the odds of men and women being wears of glasess/contact lenses for distance vision significantly differs.
+
+> Then to test whether the proportion of wearers of glasses/contact lenses for distance vision differs between men and women we will use the chi-square test
+
+``` stata
+. tabulate logicalRIAGENDR logicalVIQ220, chi2
+
+logicalRIA |     logicalVIQ220
+     GENDR |         0          1 |     Total
+-----------+----------------------+----------
+         0 |     1,673      1,521 |     3,194 
+         1 |     1,919      1,134 |     3,053 
+-----------+----------------------+----------
+     Total |     3,592      2,655 |     6,247 
+
+          Pearson chi2(1) =  70.1108   Pr = 0.000
+```
+
+> The value of test-statistics are very small and close to zero,so we can say that the proportion of wearers of glasses/contact lenses for distance vision differs between men and women.
+
+# Problem 2 Sakila
+
+## a
+
+-   Aside from English, what language is most common for films? Answer this with a single SQL query.
+
+```{r}
+library(DBI)
+sakila <- dbConnect(RSQLite::SQLite(), "sakila_master.db")
+dbListTables(sakila)
+```
+
+```{r}
+dbListFields(sakila, "language")
+```
+
+```{r}
+dbGetQuery(sakila, "SELECT * FROM language LIMIT 1000")
+
+dbGetQuery(sakila, "SELECT language_id, COUNT(language_id) AS `value_occurrence` FROM film GROUP BY language_id ORDER BY `value_occurrence` DESC")
+```
+
+> From the results, we see that the most common language is English, and there are no more other languages in this dataset.
+
+## b
+
+-   What genre of movie is the most common in the data, and how many movies are of this genre?
+
+```{r}
+dbGetQuery(sakila, "select * from category limit 100")
+```
+
+> First we extract the `category` table to know the corresponding categories of numbers.
+
+**Using R to solve it**
+
+```{r}
+library(dplyr)
+two_b_table<-dbGetQuery(sakila, "select * from film_category limit 1000")
+two_b_table|>group_by(category_id)|>summarise(counts=n())|>arrange(desc(counts))
+```
+
+> The most common type id is 15, which indicates for `Sports` type, and there are 74 movies belong to this genre. This result is the same as previous one.
+
+**Using SQL to solve it**
+
+```{r}
+head(dbGetQuery(sakila, "select * from film_category limit 1000"))
+
+dbGetQuery(sakila, "SELECT category_id, COUNT(category_id) AS `value_occurrence` FROM film_category GROUP BY category_id ORDER BY `value_occurrence` DESC")
+```
+
+> From the data we can know that the most common film type is `Sports`, and it counts for 74 movies in total.
+
+## c
+
+-   Identify which country or countries have exactly 9 customers.
+
+**Using R to solve it**
+
+```{r}
+two_c_table<-dbGetQuery(sakila, "select * from customer_list limit 1000")
+two_c_table|>group_by(country)|>summarise(counts=n())|>arrange(desc(counts))|>filter(counts=="9")
+```
+
+> The country with exactly 9 customers is the United Kingdom.
+
+**Using SQL to solve it**
+
+```{r}
+d5 <- dbGetQuery(sakila,"
+SELECT country FROM (
+  SELECT COUNT(ctm.customer_id) AS count, ctry.country AS country FROM customer ctm LEFT JOIN address a ON ctm.address_id = a.address_id LEFT JOIN city ct ON a.city_id = ct.city_id LEFT JOIN country ctry ON ct.country_id = ctry.country_id GROUP BY ctry.country) WHERE count = 9
+")
+d5
+```
+
+> From the result we can see that the country has exactly 9 customers is the U.K., which is the same as calculated before.
+
+# Problem 3 US Records
+
+## a
+
+-   What proportion of email addresses are hosted at a domain with TLD ".net"? (E.g. in the email, "[angrycat\@freemail.org](mailto:angrycat@freemail.org){.email}", "freemail.org" is the domain, with TLD (top-level domain) ".org".)
+
+```{r}
+the_table<-read.csv("us-500.csv")
+library(tidyverse)
+head(the_table)
+```
+
+```{r}
+grepl(".net",the_table$email)|>sum(na.rm=TRUE)
+
+grepl(".net",the_table$email)|>sum(na.rm=TRUE)/nrow(the_table)
+```
+
+> There are 73 addresses hosted at a domain with TLD "net", and thus the proportion would be 73/500=0.146
+
+## b
+
+-   What proportion of email addresses have at least one non alphanumeric character in them?
+
+```{r}
+grepl("[^a-zA-Z0-9@.]",the_table$email)|>sum(na.rm=TRUE)
+
+grepl("[^a-zA-Z0-9@.]",the_table$email)|>sum(na.rm=TRUE)/nrow(the_table)
+```
+
+> There are 124 email address containing at least one non-alphanumeric character, and thus the proportion would be 124/500=0.248
+
+## c
+
+-   What is the most common area code amongst all phone numbers?
+
+```{r}
+the_table_2<-the_table%>%
+  mutate(area_code_1=substr(the_table$phone1, 1, 3))%>%
+  mutate(area_code_2=substr(the_table$phone2, 1, 3))
+
+the_table_2%>%
+  group_by (area_code_1)|>summarize(counts=n())|>arrange(desc(counts))
+
+the_table_2%>%
+  group_by (area_code_2)|>summarize(counts=n())|>arrange(desc(counts))
+```
+
+> From the result we can see that the most common area code is 973.
+>
+> We can also notice that even there are two columns for phone, each household has the same area code for their phones since their addresses are fixed, so count on `area_code_1` or `area_code_2` would yield the same results.
+
+## d
+
+-   Produce a histogram of the log of the apartment numbers for all addresses. (You may assume any number after the street is an apartment number.)
+
+```{r}
+apt_nums <- regmatches(the_table$address, regexpr("[1234567890]+$", the_table$address))
+
+hist(log(as.numeric(apt_nums)),main="Histogram of the Log of the Apartment Numbers for all Addresses")
+```
+
+
+> The Benford's law states that in many real-life sets of numerical data, the leading digit is likely to be small. In sets that obey the law, the number 1 appears as the leading significant digit about 30% of the time, while 9 appears as the leading significant digit less than 5% of the time.
+>
+> From the rough pattern, I think it does not follow the Benford's law, as the number with small digits appears too much frequently than large digits.
+
+```{r}
+library(BenfordTests)
+chisq.benftest(as.numeric(apt_nums))
+```
+
+> Then, with the specific function in R, we can test if it follows theBenford's law. The p-value is extremely small, indicating that there is a significant difference between the observed data and the Benford distribution, so apartment numbers can not pass as real data.
+
+## f
+-   Repeat your analysis of Benford's law on the last digit of the street number.
+
+```{r}
+# just some notes, please do not grade them unlist(strsplit(the_table$address," ")){extract(the_table, "address", c("Streetname", "HouseNumber", "Apt"), "(\\D+)(\\d.*)(\\D+)")}
+```
+
+```{r}
+#pattern <- "^(\\d+)\\s"
+the_table_3 <- the_table %>%
+   mutate(st_num =as.numeric(str_extract(address, "\\d+")))%>%
+  mutate(last_digit = st_num %% 10)
+```
+
+```{r}
+ggplot(the_table_3, aes(x = last_digit))+geom_histogram()+xlab("last digit")+ggtitle("The Frequency of the Last Digit of Street Number")
+```
+
+> From Wikipedia, the logarithm-histogram of Benford Law should be like
+>
+> ![Attribution: https://commons.wikimedia.org/wiki/File:Rozklad_benforda.svg](images/Screen%20Shot%202023-10-10%20at%206.02.26%20AM.png){width="350"}
+>
+> Obviously it's not similar to what we got from above. So I think the last digit of street number doesn't follow the Benford law.
+
+```{r}
+chisq.benftest(the_table_3$last_digit)
+```
+
+> By using the function again, we can re-confirm that this time it also has a significant difference between the observed data and the Benford distribution.
