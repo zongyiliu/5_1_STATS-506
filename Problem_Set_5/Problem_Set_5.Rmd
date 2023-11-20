@@ -1,0 +1,136 @@
+---
+title: "Problem_Set_5"
+author: "Zongyi Liu"
+date: "2023-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1 Plotting
+
+Use the `nnmaps` data set again. I'd recommend using `ggplot2` for these.
+
+### Question a
+
+Produce a graph of the `mean` monthly temperature in celsius. Draw a scatter-plot where the x-axis is month and the y-axis is the average monthly temperature in celsius. Add a line connecting the points within each season and color the lines and points by season (same color for lines and points in the same season). Be sure both x-axis and the legend are ordered appropriately, and that all labels/titles are clear and ready for publication (e.g. no variable names).
+
+```{r}
+data_use<-read.csv("chicago-nmmaps.csv")
+#data_use
+library(ggplot2)
+library(dplyr)
+
+data_use_2<-data_use%>%mutate(
+  temp_cel=(temp-32)*5/9,
+  date = as.POSIXct(date, format = "%Y-%m-%d"),
+  year_month = format(date, "%Y-%m")
+)%>%group_by(month,season)
+
+# Reorder the month column
+# data_use_2$month%>%reorder(order = month.abb)
+
+data_use_2$month <- factor(data_use_2$month, levels = month.abb)
+
+data_use_3<-data_use_2%>%summarise(avg_temp_cel=mean(temp_cel))
+```
+
+```{r}
+ggplot(data_use_3, aes(x = month, y = avg_temp_cel, color = season, group = season)) +
+    geom_point() +
+    geom_line() +
+    labs(
+        x = "Time",
+        y = "Average Temperature (C)",
+        title = "Average Monthly Temperature in Chicago",
+        color = "Season"
+    )
+```
+
+### Question b
+
+Produce a similar plot with four sets of lines: mean monthly temperature in celsius, mean monthly O3, mean monthly PM10, and mean monthly dewpoint. Figure out a way to distinguish between the four lines. Again, make sure the plot is publication-ready (clean and clear labels). Use the plot to answer the following question: "Which of the four variables seems to have the least seasonal trend?"
+
+```{r}
+data_use_4<-data_use_2%>%
+  group_by(month,season)%>%
+  summarise(
+    avg_temp_cel=mean(temp_cel,na.rm = T),
+    avg_O3 = mean(o3, na.rm =T),
+    avg_PM10 = mean(pm10, na.rm =T),
+    avg_dewpoint = mean(dewpoint, na.rm = T)
+    )
+
+data_use_4
+```
+
+```{r}
+# Totally the same as before
+ggplot(data_use_4) + 
+    geom_point(aes(x = month, y = avg_temp_cel, color = season)) +
+    geom_line(aes(x = month, y = avg_temp_cel, color = season, group = season, linetype = "Temperature")) +
+    geom_point(aes(x = month, y = avg_O3, color = season)) +
+    geom_line(aes(x = month, y = avg_O3, color = season, group = season, linetype = "O3")) +
+    geom_point(aes(x = month, y = avg_PM10, color = season)) +
+    geom_line(aes(x = month, y = avg_PM10, color = season, group = season, linetype = "PM10")) +
+    geom_point(aes(x = month, y = avg_dewpoint, color = season)) +
+    geom_line(aes(x = month, y = avg_dewpoint, color = season, group = season, linetype = "Dew_Point")) +
+    labs(
+        x = "Month",
+        y = "Value",
+        title = "Monthly Average Weather Data in Chicago",
+        color = "Season",
+        linetype = "Weather Data"
+    )
+```
+
+> From the plot we can say that O3 has the least seasonal trend
+
+# Problem 3 NYCFlights 13
+
+### Question a
+
+Use the **tidyverse** for this problem. In particular, use piping and **dplyr** as much as you are able. **Note**: Use of any deprecated functions will result in a point loss.
+
+Install and load the package [**nycflights13**](https://cran.r-project.org/package=nycflights13).
+
+Generate a table (which can just be a nicely printed tibble) reporting the mean and median departure delay per airport. Generate a second table (which again can be a nicely printed tibble) reporting the mean and median arrival delay per airport. Exclude any destination with under 10 flights. Do this exclusion through code, not manually.
+
+Additionally,
+
+-   Order both tables in descending mean delay.
+
+-   Both tables should use the airport *names* not the airport *codes*.
+
+-   Both tables should print all rows.
+
+```{r}
+library(nycflights13)
+library(data.table)
+```
+
+```{r}
+# Convert flights and airports to data.table
+flights_dt <- as.data.table(flights)
+airports_dt <- as.data.table(airports)
+
+# Filter out airports with less than 10 flights
+valid_origins <- flights_dt[, .N, by = .(origin)][N >= 10, origin]
+filtered_flights <- flights_dt[origin %in% valid_origins]
+
+dep_delay_table <- filtered_flights[, .(mean_dep_delay = mean(dep_delay, na.rm = TRUE),
+                                        median_dep_delay = median(dep_delay, na.rm = TRUE)
+                                    ), by = .(origin)]
+# Add airport names
+dep_delay_table <- airports_dt[dep_delay_table, on = .(faa = origin), 
+                                .(name, mean_dep_delay, median_dep_delay)]
+# Order by mean departure delay
+dep_delay_table <- dep_delay_table[order(-mean_dep_delay)]
+dep_delay_table
+```
+
+### Question b
+
+How many flights did the aircraft model with the fastest average speed take? Produce a tibble with 1 row, and entires for the model, average speed (in MPH) and number of flights.
