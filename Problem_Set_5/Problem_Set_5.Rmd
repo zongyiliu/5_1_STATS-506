@@ -1,7 +1,7 @@
 ---
 title: "Problem_Set_5"
 author: "Zongyi Liu"
-date: "2023-11-20"
+date: "2023-11-15"
 output: html_document
 ---
 
@@ -9,7 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Problem 1 Plotting
+> The Github link for this assignment: <https://github.com/zongyiliu/5_1_STATS_506/tree/main/Problem_Set_5>
+
+# Problem 1 Plotting NNMAPS
 
 Use the `nnmaps` data set again. I'd recommend using `ggplot2` for these.
 
@@ -82,11 +84,210 @@ ggplot(data_use_4) +
         y = "Value",
         title = "Monthly Average Weather Data in Chicago",
         color = "Season",
-        linetype = "Weather Data"
+        linetype = "Weather Data",
+        shape="Weather Data"
     )
 ```
 
-> From the plot we can say that O3 has the least seasonal trend
+> In this plot, from top to bottom are `Dew Point`, `PM 10`, `O3`, and `Temperature`.
+>
+> From the plot we can say that PM10 has the least seasonal trend
+
+# Problem 2 **OOP Programming**
+
+### Question a
+
+Create a class to represent a polynomial expression called `poly`. Do this using S4.
+
+For the `poly` class, define the following:
+
+-   A constructor
+
+-   A validator
+
+-   A `show` method
+
+-   Addition and substraction
+
+Very minor extra credit for ensuring that `show` reduces noice by
+
+-   
+
+    a)  reducing $x^1$ and $x^0$ to $x$ and $1$ as appropriate, and
+
+-   
+
+    b)  suppressing terms with coefficients of 0.
+
+```{r}
+library(stringr)
+```
+
+```{r}
+# 1_Define `poly` class
+setClass("poly", 
+         slots = list(coefficients = "numeric", 
+                   exponents = "numeric"))
+
+
+# 2_Set the Constructor
+
+make_poly <- function(expression){
+  # Parse the strings
+  # And we need to judge the sign
+  terms <- unlist(strsplit(expression, 
+                           split ="(?<=\\D)(?=[+-])|(?<=[+-])(?=\\D)", 
+                           perl = TRUE))
+  coeffs <- numeric()
+  exps <- numeric()
+
+  for (term in terms){
+    
+    # If it's negative
+
+    sign <- ifelse(grepl("^-", term), -1, 1)
+    term <- gsub("^[+-]\\s*", "", term) 
+
+    # Assume that indeterminate is always "x"
+    coeff <- ifelse(grepl("x", term), 1, 0) 
+    coeff <- ifelse(grepl("^\\d+", term), as.numeric(sub("x.*$", "", term)), coeff)  
+    coeff <- sign * coeff  
+
+    exp <- ifelse(grepl("x", term), 1, 0) 
+    exp <- ifelse(grepl("x\\^", term), as.numeric(sub(".*\\^", "", term)), exp)
+
+    coeffs <- c(coeffs, coeff)
+    exps <- c(exps, exp)
+  }
+  
+  # Create the new term
+  new("poly", coefficients = coeffs, exponents = exps)
+}
+
+
+# 3_Set the Validator
+
+setValidity("poly", function(object){
+  
+  # Check if coefficients and exponents have the same length
+  if(length(object@coefficients) != length(object@exponents)) {
+    stop("Coefficients and exponents should have the same length")
+    
+  # Check if exponents are non-neg integers
+  if (any(object@exponents < 0) || any(object@exponents != as.integer(object@exponents))) 
+    return("Exponents must be Non-negative Integers")
+    
+    # Check if coeffs are numeric
+    if (!is.numeric(object@coefficients)) 
+        return("Coefficients must be Numeric")
+    TRUE
+  }
+  
+  return(TRUE)
+})
+
+
+# 4_Define the Show Methods
+
+setMethod("show", "poly", function(object){
+  
+  # Reorder terms
+  new_order <- order(object@exponents, decreasing = TRUE)
+  newly_ordered__coeffs <- object@coefficients[new_order]
+  newly_ordered__exps <- object@exponents[new_order]
+
+  unique_exps <- unique(newly_ordered__exps)
+  new_coeffs <- sapply(unique_exps, function(exp){
+    sum(newly_ordered__coeffs[newly_ordered__exps == exp])
+  })
+
+  terms <- mapply(function(coeff, exp){
+    if (coeff == 0){
+      return(NULL)
+    } else if (exp == 0){
+      return(as.character(coeff))
+    } else if (exp == 1){
+      return(ifelse(coeff == 1, "x", ifelse(coeff == -1, "-x", paste0(coeff, "x"))))
+    } else{
+      return(ifelse(coeff == 1, paste0("x^", exp), 
+                    ifelse(coeff == -1, paste0("-x^", exp), 
+                           paste0(coeff, "x^", exp))))
+    }
+  }, new_coeffs, unique_exps, SIMPLIFY = FALSE)
+  
+  # remove NULL terms
+  terms <- Filter(Negate(is.null), terms) 
+  
+  # Add back the new polynomial terms
+  new_string <- paste(terms, collapse = " ") # Use gsub() to replace all occurrence of specific texts
+  new_string <- gsub(" ([^\\-])", " + \\1", new_string)
+  new_string <- gsub("-", "- ", new_string)
+  cat(new_string, "\n")
+  
+  return(invisible(object))
+})
+
+
+# 5_Define the Addition Method
+
+setMethod("+", signature("poly", "poly"), function(e1, e2){
+  # Combine exponents and coefficients
+  exponents_aggr <- unique(c(e1@exponents, e2@exponents))
+  new_coeffs <- numeric(length(exponents_aggr))
+  
+  # Add the term with the same exponents together
+  for (exp in exponents_aggr){
+    new_coeffs[which(exponents_aggr == exp)] <-sum(e1@coefficients[e1@exponents == exp], 
+                                              e2@coefficients[e2@exponents == exp])
+  }
+
+  # Reorder the terms
+  new_order <- order(exponents_aggr, decreasing = TRUE)
+  new_coeffs <- new_coeffs[new_order]
+  exponents_aggr <- exponents_aggr[new_order]
+  
+  # Create the new term
+  new("poly", coefficients = new_coeffs, exponents = exponents_aggr)
+})
+
+
+# 6_define the Subtraction Method
+
+# The same as before
+setMethod("-", signature("poly", "poly"), function(e1, e2){
+  # Combine exponents and coefficients
+  exponents_aggr <- unique(c(e1@exponents, e2@exponents))
+  new_coeffs <- numeric(length(exponents_aggr))
+  # Add the term with the same exponents together
+  for (exp in exponents_aggr) {
+    new_coeffs[which(exponents_aggr == exp)] <- sum(e1@coefficients[e1@exponents == exp], 
+                                              -e2@coefficients[e2@exponents == exp])
+  }
+  # Reorder the terms
+  new_order <- order(exponents_aggr, decreasing = TRUE)
+  new_coeffs <- new_coeffs[new_order]
+  exponents_aggr <- exponents_aggr[new_order]
+
+  # Create the new term
+  new("poly", coefficients = new_coeffs, exponents = exponents_aggr)
+})
+```
+
+### Question b
+
+Use your `poly` class to run the following code:
+
+```{r}
+p1 <- make_poly("3x^2 + 2")
+p2 <- make_poly("7x^3 - 2x^2 - x + 17")
+p1
+p2
+p1 + p2
+p1 - p2
+
+
+# Just a note: NAs introduced by coercion3x^2 + 2 
+```
 
 # Problem 3 NYCFlights 13
 
@@ -107,30 +308,93 @@ Additionally,
 -   Both tables should print all rows.
 
 ```{r}
+# install.packages("data.table")
 library(nycflights13)
 library(data.table)
 ```
 
 ```{r}
-# Convert flights and airports to data.table
+# Import tibble as data.table
 flights_dt <- as.data.table(flights)
 airports_dt <- as.data.table(airports)
 
-# Filter out airports with less than 10 flights
-valid_origins <- flights_dt[, .N, by = .(origin)][N >= 10, origin]
-filtered_flights <- flights_dt[origin %in% valid_origins]
+# Exclude any destination with under 10 flights
+destination_1 <- flights_dt[, .N, by = .(origin)][N >= 10, origin]
 
-dep_delay_table <- filtered_flights[, .(mean_dep_delay = mean(dep_delay, na.rm = TRUE),
+filtered_flights <- flights_dt[origin %in% destination_1]
+
+departure_delay <- filtered_flights[, .(mean_dep_delay = mean(dep_delay, na.rm = TRUE),
                                         median_dep_delay = median(dep_delay, na.rm = TRUE)
                                     ), by = .(origin)]
+
 # Add airport names
-dep_delay_table <- airports_dt[dep_delay_table, on = .(faa = origin), 
+departure_delay <- airports_dt[departure_delay, on = .(faa = origin), 
                                 .(name, mean_dep_delay, median_dep_delay)]
+
 # Order by mean departure delay
-dep_delay_table <- dep_delay_table[order(-mean_dep_delay)]
-dep_delay_table
+departure_delay <- departure_delay[order(-mean_dep_delay)]
+departure_delay
 ```
+
+> The result is the same as I got in Problem Set 4
+
+```{r}
+# Edit the arr_delay columns in flights_dt
+
+arrival_delay <- flights_dt[, .(
+  mean_delay = mean(arr_delay, na.rm = TRUE),
+  med_delay = median(arr_delay, na.rm = TRUE),
+  numf_lights = .N
+), by = .(dest)]
+
+# Exclude any destination with under 10 flights
+arrival_delay <- arrival_delay[numf_lights >= 10]
+
+# Join with airports data to get airport names
+arrival_delay <- merge(arrival_delay, airports_dt, 
+                          by.x = "dest", by.y = "faa", all.x = TRUE)
+
+# There are some NA entries in names, we need to replace them with FAA codes. If we do not do so, there would be 105 colummns in the final result
+arrival_delay[, name := fcoalesce(name, dest)]
+
+# Reorder the column
+arrival_delay <- arrival_delay[, .(name, 
+                                         mean_delay, 
+                                         med_delay)][order(-mean_delay)]
+
+# Print
+arrival_delay
+```
+
+> There are 102 rows; the same as before.
 
 ### Question b
 
-How many flights did the aircraft model with the fastest average speed take? Produce a tibble with 1 row, and entires for the model, average speed (in MPH) and number of flights.
+How many flights did the aircraft model with the fastest average speed take? Produce a tibble with 1 row, and entries for the model, average speed (in MPH) and number of flights.
+
+```{r}
+# Import as data table
+planes_dt <- as.data.table(planes)
+
+# Join the table
+flights_planes_dt <- flights_dt[planes_dt, on = .(tailnum),nomatch = 0]
+
+flights_planes_dt[, c("air_time", "distance") := list(as.numeric(air_time), 
+                                                     as.numeric(distance))]
+
+## As we did before, we can not directly utilize the speeed variable becasue there would incur NA values. Thus we need to calculate speed in mph here
+flights_planes_dt[!is.na(time) & !is.na(distance), 
+                 mph := distance / (air_time / 60)]
+
+# Calculate average speed and number of flights
+avg_speed <- flights_planes_dt[, .(
+  avg_speed = mean(mph, na.rm = TRUE), 
+  num_flights = .N
+  ), by = .(model)]
+
+fastest_avg_speed<-avg_speed[order(-avg_speed)][1]
+
+fastest_avg_speed
+```
+
+> The result is the same as I got in Problem Set 4
