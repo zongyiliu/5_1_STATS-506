@@ -1,1 +1,280 @@
+---
+title: "Problem_Set_6"
+author: "Zongyi Liu"
+date: "2023-12-04"
+output: html_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1
+
+> The Github link for this assignment please visit: <https://github.com/zongyiliu/5_1_STATS_506/tree/main/Problem_Set_6>
+
+If a sample has a categorical variable with small groups, bootstrapping can be tricky. Consider a situation where `n = 100`, but there is some categorical variable `g` where category `g = 1` has only 2 observations. If we re-sample with replacement 100 times from those observations, there is a
+
+$$
+(\frac{98}{100})^{100} \approx 13 \%
+$$
+
+chance that the bootstrap sample does not include either observation from `g = 1`. This implies that if we are attempting to obtain a bootstrap estimate in group `g = 1`, 13% of the bootstrapped samples will have no observations from that group and thus unable to produce an estimate.
+
+A way around this is to carry out stratified bootstrap: Instead of taking a sample with replacement of the whole sample, take separate samples with replacement within each strata of the same size of the strata, then combine those resamples to generate the bootstrap sample.
+
+Use the `flights` data from the **nycflights13** package. Use stratafied bootstrapping by `dests` to estimate the average `air_time` for flights within each `origin` and produce a table including the estimates and confidence intervals for each `origin`.
+
+Carry this out two ways:
+
+1.  Without any parallel processing
+
+2.  With some form of parallel processing (either **parallel** or **futures** package). (For very minor extra credit, implement with both packages.)
+
+Generate at least 1,000 bootstrapped samples. Report the performance difference between the versions.
+
+```{r}
+# install.packages("parallel")
+# install.packages(“future”)
+
+library(nycflights13)
+library(dplyr)
+library(parallel)
+library(future)
+library(purrr)
+```
+
+```{r}
+# Load the data
+data(flights)
+
+# Select the terms that we would use: `origin`, `dest`, and `air_time`
+
+flights <- flights[, c("origin", "dest", "air_time")]
+
+# We create a list to hold the data from each `origin`.
+flights_by_origin <- list()
+for (origin in unique(flights$origin)) {
+  flights_by_origin[[origin]] <- flights[flights$origin == origin, ]
+}
+
+# We make an initial estimate of the average `air_time` for each `origin`.
+est_air_time_by_origin <- list()
+for (origin in unique(flights$origin)) {
+  est_air_time_by_origin[[origin]] <- mean(flights_by_origin[[origin]]$air_time, 
+                                           na.rm = TRUE)
+}
+```
+
+```{r}
+# Detect how many cores are there
+detectCores()
+```
+
+```{r}
+#| code-fold: show
+#| code-summary: "Define boot function"
+#| warning: true
+#| error: true
+
+#' Stratified bootstrap method.
+#' 
+#' Instead of taking a sample with replacement of the whole sample, 
+#' take separate samples with replacement within each strata of the same size of the strata,
+#' then combine those new samples to generate the bootstrap sample.
+#' 
+#' In this case, it will take `dest` as strata.
+#'
+#' @param flights_data is a `data.frame` that contains the flights' data from one `origin`.
+#'
+#' @return the average `air_time` of the stratified bootstrap samples with `dest` as strata.
+average_air_time_bootstrapped_by_dest <- function(flights_data) {
+  air_time_samples <- list()
+  # For each `dest`, we conduct bootstrap.
+  for (dest in unique(flights_data$dest)) {
+    flights_by_dest <- flights_data[flights_data$dest == dest, ]
+    air_time_samples[[dest]] <- sample(flights_by_dest$air_time, 
+                                      nrow(flights_by_dest), 
+                                      replace = TRUE)
+  }
+  
+  # Combine the samples to get the output.
+  air_time_samples_vector <- do.call(c, air_time_samples)
+  return(mean(air_time_samples_vector, na.rm = TRUE))
+}
+```
+
+We write a non-parallel function to calculate the confidence intervals of `air_time` for each `origin`.
+
+```{r}
+#| code-fold: show
+#| code-summary: "Without parallel processing"
+#| warning: true
+#| error: true
+
+#' Calculate the confidence intervals of average `air_time` for each `origin`. This is a non-parallel implementation.
+#'
+#' @param flights_by_origin is a list including multiple `data.frame` with each `data.frame` storing the flights from one `origin`.
+#' @param reps is the repeated times of bootstrap.
+#' @param alpha helps to define the confidence interval.
+#'
+#' @return the confidence interval of average `air_time` for each `origin`.
+avg_air_time_ci_bootstrap_wo_parallel <- function(flights_by_origin, 
+                                                  reps, 
+                                                  alpha) {
+  bs_avg_air_time_ci_by_origin <- list()
+
+  for (origin in names(flights_by_origin)) {
+    flights_from_origin <- flights_by_origin[[origin]]
+    # Generate `reps` bootstrapped samples.
+    bs_mean_air_time_samples <- sapply(seq_len(reps), function(x) {
+      return(average_air_time_bootstrapped_by_dest(flights_from_origin))
+    })
+    
+    # Compute lower bound and upper bound of confidence interval
+    lower_b <- quantile(bs_mean_air_time_samples, probs = alpha / 2)
+    upper_b <- quantile(bs_mean_air_time_samples, probs = 1 - alpha / 2)
+    
+    bs_avg_air_time_ci_by_origin[[origin]] <- c(lower_b, upper_b)
+  }
+
+  return(do.call(rbind, bs_avg_air_time_ci_by_origin))
+}
+
+```
+
+The following two code blocks implement the same function using parallel processing.
+
+```{r}
+#| code-fold: show
+#| code-summary: "With parallel processing (Future)"
+#| warning: false
+#| error: true
+
+
+library(future)
+plan(multisession)
+
+#' Calculate the confidence intervals of average `air_time` for each `origin`. This is a `future` implementation.
+#'
+#' @param flights_by_origin is a list including multiple `data.frame`s with each `data.frame` storing the flights from one `origin`.
+#' @param reps is the repeated times of bootstrap.
+#' @param alpha helps to define the confidence interval.
+#'
+#' @return the confidence interval of average `air_time` for each `origin`.
+avg_air_time_ci_bootstrap_w_future <- function(flights_by_origin, 
+                                                reps, 
+                                                alpha) {
+  bs_avg_air_time_ci_by_origin <- list()
+
+  for (origin in names(flights_by_origin)) {
+    flights_from_origin <- flights_by_origin[[origin]]
+    # We create `reps` futures to get the bootstrapped samples.
+    bs_mean_air_time_futures <- lapply(seq_len(reps), function(x) {
+      return(future(average_air_time_bootstrapped_by_dest(flights_from_origin), seed = TRUE))
+    })
+    
+    bs_mean_air_time_samples <- sapply(bs_mean_air_time_futures, value)
+    
+    lower_b <- quantile(bs_mean_air_time_samples, probs = alpha / 2)
+    upper_b <- quantile(bs_mean_air_time_samples, probs = 1 - alpha / 2)
+    
+    bs_avg_air_time_ci_by_origin[[origin]] <- c(lower_b, upper_b)
+  }
+
+
+  return(do.call(rbind, bs_avg_air_time_ci_by_origin))
+}
+
+```
+
+```{r}
+#| code-fold: show
+#| code-summary: "With parallel processing (Parallel)"
+#| warning: true
+#| error: true
+
+library(parallel)
+
+#' Calculate the confidence intervals of average `air_time` for each `origin`. This is a `parallel` implementation.
+#'
+#' @param flights_by_origin is a list including multiple `data.frame`s with each `data.frame` storing the flights from one `origin`.
+#' @param reps is the repeated times of bootstrap.
+#' @param alpha helps to define the confidence interval.
+#'
+#' @return the confidence interval of average `air_time` for each `origin`.
+avg_air_time_ci_bootstrap_w_parallel <- function(flights_by_origin, 
+                                                reps, 
+                                                alpha) {
+  # Create the cluster.
+  cl <- makeCluster(detectCores())
+  
+  # Load some functions and data
+  clusterExport(cl, "average_air_time_bootstrapped_by_dest")
+  clusterExport(cl, "flights_by_origin", envir = environment())
+  
+  bs_avg_air_time_ci_by_origin <- list()
+  
+  for (origin in names(flights_by_origin)) {
+    clusterExport(cl, "origin", envir = environment())
+    clusterEvalQ(cl, flights_from_origin <- flights_by_origin[[origin]])
+    bs_mean_air_time_samples <- parSapply(cl, seq_len(reps), function(x) {
+      return(average_air_time_bootstrapped_by_dest(flights_from_origin))
+    })
+    
+    lower_b <- quantile(bs_mean_air_time_samples, probs = alpha / 2)
+    upper_b <- quantile(bs_mean_air_time_samples, probs = 1 - alpha / 2)
+
+    # mean_sd <- sd(bs_mean_air_time_samples)
+    # lower_b <- est_air_time_by_origin[[origin]] - 1.96 * mean_sd
+    # upper_b <- est_air_time_by_origin[[origin]] + 1.96 * mean_sd
+    
+    bs_avg_air_time_ci_by_origin[[origin]] <- c(lower_b, upper_b)
+  }
+  
+  stopCluster(cl)
+
+  return(do.call(rbind, bs_avg_air_time_ci_by_origin))
+}
+
+```
+
+We test the performance of these three functions, and we find that the `future` implementation performs worst. This may be because the initialization time for every `future` object accounts for the main part of time consumption, and therefore, the advantage of parallel processing can't be shown. It's not surprising to see that the `parallel` implementation runs fastest. By allocating bootstrap tasks to multiple CPU cores, we can achieve significant speedup.
+
+```{r}
+#| code-fold: show
+#| code-summary: "Performance comparison"
+#| warning: true
+#| error: true
+
+# Test non-parallel version.
+system.time({
+   ci_matrix_1 <- avg_air_time_ci_bootstrap_wo_parallel(flights_by_origin,
+                                                        reps = 1000, alpha = 0.05)
+})
+result_df_1 <- data.frame(est_air_time = do.call(c, est_air_time_by_origin),
+                        lower_bound = ci_matrix_1[, 1],
+                        upper_bound = ci_matrix_1[, 2])
+print(result_df_1)
+
+# Test future version.
+system.time({
+  ci_matrix_2 <- avg_air_time_ci_bootstrap_w_future(flights_by_origin,
+                                     reps = 1000, alpha = 0.05)
+})
+result_df_2 <- data.frame(est_air_time = do.call(c, est_air_time_by_origin),
+                        lower_bound = ci_matrix_2[, 1],
+                        upper_bound = ci_matrix_2[, 2])
+print(result_df_2)
+
+# Test parallel version.
+system.time({
+  ci_matrix_3 <- avg_air_time_ci_bootstrap_w_parallel(flights_by_origin, 
+                                     reps = 1000, alpha = 0.05)
+})
+result_df_3 <- data.frame(est_air_time = do.call(c, est_air_time_by_origin),
+                        lower_bound = ci_matrix_3[, 1],
+                        upper_bound = ci_matrix_3[, 2])
+print(result_df_3)
+
+```
