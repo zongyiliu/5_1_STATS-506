@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = T)
 ```
 
 # Problem 1
@@ -51,7 +51,7 @@ library(purrr)
 detectCores()
 ```
 
-### Estimate the data
+### Estimate the data and do the Bootstrap
 
 ```{r}
 # Load the data
@@ -66,40 +66,42 @@ flights_by_origin <- list()
 for (origin in unique(flights$origin)) {
   flights_by_origin[[origin]] <- flights[flights$origin == origin, ]
 }
-
-# We make an initial estimate of the average `air_time` for each `origin`.
 est_air_time_by_origin <- list()
 for (origin in unique(flights$origin)) {
   est_air_time_by_origin[[origin]] <- mean(flights_by_origin[[origin]]$air_time, 
-                                           na.rm = TRUE)
+                                           na.rm = T)
 }
 ```
+
+```{r}
+# flights
+```
+
 
 ### Non-Parallel Method
 
 ```{r}
-average_air_time_bootstrapped_by_dest <- function(flights_data) {
+# We do the bootstrap method here
+
+average_air_time_bootstrap <- function(flights_data) {
   air_time_samples <- list()
-  # For each `dest`, we conduct bootstrap.
+  
   for (dest in unique(flights_data$dest)) {
     flights_by_dest <- flights_data[flights_data$dest == dest, ]
-    air_time_samples[[dest]] <- sample(flights_by_dest$air_time, 
-                                      nrow(flights_by_dest), 
-                                      replace = TRUE)
+    air_time_samples[[dest]] <- sample(flights_by_dest$air_time,nrow(flights_by_dest), replace = T)
   }
   
   # Combine the samples to get the output.
   air_time_samples_vector <- do.call(c, air_time_samples)
-  return(mean(air_time_samples_vector, na.rm = TRUE))
+  return(mean(air_time_samples_vector, na.rm = T))
 }
 ```
-
 
 
 ### Non-Parallel Method
 
 ```{r}
-avg_air_time_ci_bootstrap_wo_parallel <- function(flights_by_origin, 
+avg_at_non_parallel <- function(flights_by_origin, 
                                                   reps, 
                                                   alpha) {
   bs_avg_air_time_ci_by_origin <- list()
@@ -109,7 +111,7 @@ avg_air_time_ci_bootstrap_wo_parallel <- function(flights_by_origin,
     
     # Generate `reps` bootstrapped samples.
     bs_mean_air_time_samples <- sapply(seq_len(reps), function(x) {
-      return(average_air_time_bootstrapped_by_dest(flights_from_origin))
+      return(average_air_time_bootstrap(flights_from_origin))
     })
     
     # Compute lower bound and upper bound of confidence interval
@@ -123,12 +125,11 @@ avg_air_time_ci_bootstrap_wo_parallel <- function(flights_by_origin,
 }
 ```
 
-> Then we test the time it would consume, and the results
-
+> Then we estimate the time needed for this calculation, and the results
 
 ```{r}
 system.time({
-   ci_matrix_1 <- avg_air_time_ci_bootstrap_wo_parallel(flights_by_origin,
+   ci_matrix_1 <- avg_at_non_parallel(flights_by_origin,
                                                         reps = 1200, alpha = 0.05)
 })
 result_df_1 <- data.frame(est_air_time = do.call(c, est_air_time_by_origin),
@@ -150,9 +151,9 @@ avg_air_time_ci_bootstrap_w_parallel <- function(flights_by_origin,
   # Create the cluster
   cl <- makeCluster(detectCores())
   
-  # Export cluster (import the data)
+  # Using culsterExport to import the data
   
-  clusterExport(cl, "average_air_time_bootstrapped_by_dest")
+  clusterExport(cl, "average_air_time_bootstrap")
   clusterExport(cl, "flights_by_origin", envir = environment())
   
   bs_avg_air_time_ci_by_origin <- list()
@@ -161,10 +162,10 @@ avg_air_time_ci_bootstrap_w_parallel <- function(flights_by_origin,
     clusterExport(cl, "origin", envir = environment())
     clusterEvalQ(cl, flights_from_origin <- flights_by_origin[[origin]])
     bs_mean_air_time_samples <- parSapply(cl, seq_len(reps), function(x) {
-      return(average_air_time_bootstrapped_by_dest(flights_from_origin))
+      return(average_air_time_bootstrap(flights_from_origin))
     })
     
-    # Or can do this 
+    # alternative
     # lower_b <- quantile(bs_mean_air_time_samples, probs =0.025 )
     # upper_b <- quantile(bs_mean_air_time_samples, probs =0.975)
     
@@ -199,7 +200,6 @@ print(result_df_2)
 ```{r}
 plan(multisession)
 
-
 avg_air_time_ci_bootstrap_w_future <- function(flights_by_origin, 
                                                 reps, 
                                                 alpha) {
@@ -207,10 +207,9 @@ avg_air_time_ci_bootstrap_w_future <- function(flights_by_origin,
 
   for (origin in names(flights_by_origin)) {
     flights_from_origin <- flights_by_origin[[origin]]
-    # We create `reps` futures to get the bootstrapped samples.
     
     bs_mean_air_time_futures <- lapply(seq_len(reps), function(x) {
-      return(future(average_air_time_bootstrapped_by_dest(flights_from_origin), seed = TRUE))
+      return(future(average_air_time_bootstrap(flights_from_origin), seed = T))
     })
     
     bs_mean_air_time_samples <- sapply(bs_mean_air_time_futures, value)
