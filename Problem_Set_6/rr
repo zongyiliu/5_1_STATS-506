@@ -94,18 +94,7 @@ average_air_time_bootstrapped_by_dest <- function(flights_data) {
 }
 ```
 
-> Then we estimate the time needed for this calculation, and
 
-```{r}
-system.time({
-   ci_matrix_1 <- avg_air_time_ci_bootstrap_wo_parallel(flights_by_origin,
-                                                        reps = 1200, alpha = 0.05)
-})
-result_df_1 <- data.frame(est_air_time = do.call(c, est_air_time_by_origin),
-                        lower_bound = ci_matrix_1[, 1],
-                        upper_bound = ci_matrix_1[, 2])
-print(result_df_1)
-```
 
 ### Non-Parallel Method
 
@@ -135,6 +124,18 @@ avg_air_time_ci_bootstrap_wo_parallel <- function(flights_by_origin,
 ```
 
 > Then we test the time it would consume, and the results
+
+
+```{r}
+system.time({
+   ci_matrix_1 <- avg_air_time_ci_bootstrap_wo_parallel(flights_by_origin,
+                                                        reps = 1200, alpha = 0.05)
+})
+result_df_1 <- data.frame(est_air_time = do.call(c, est_air_time_by_origin),
+                        lower_bound = ci_matrix_1[, 1],
+                        upper_bound = ci_matrix_1[, 2])
+print(result_df_1)
+```
 
 ### Parallel Method
 
